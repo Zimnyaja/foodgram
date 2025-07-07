@@ -1,9 +1,12 @@
 from rest_framework import filters, decorators, viewsets, permissions, response, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.conf import settings
 from django.contrib.auth import get_user_model, update_session_auth_hash
+from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import get_object_or_404, render
 
+from .utils.shortener import decode_code, encode_id
 from api.serializers import (IngredientSerializer, RecipeSerializer,
                              SubscriptionSerializer, TagSerializer,
                              UserCreateSerializer, UserSerializer,
@@ -16,9 +19,21 @@ from users.models import Subscription
 User = get_user_model()
 
 
+def redirect_short_link(request, code):
+    recipe_id = decode_code(code)
+    if recipe_id is None:
+        raise Http404("Invalid short link")
+    try:
+        Recipe.objects.get(id=recipe_id)
+    except Recipe.DoesNotExist:
+        raise Http404("Recipe not found")
+    return HttpResponseRedirect(f'/recipes/{recipe_id}')
+
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     pagination_class = RecipePagination
+    lookup_field = 'id'
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -47,7 +62,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @decorators.action(
         detail=True,
         methods=['post'],
-        permission_classes=[permissions.IsAuthenticated]
+        permission_classes=[permissions.IsAuthenticated],
     )
     def subscribe(self, request, id=None):
         """Подписка на пользователя."""
@@ -60,7 +75,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        subscription = Subscription.objects.filter(user=user, author=author)
+        subscription = Subscription.objects.filter(user=user, subscribed_to=author)
 
         if subscription.exists():
             return response.Response(
@@ -161,8 +176,16 @@ class TagViewSet(viewsets.ModelViewSet):
 class IngredientViewSet(viewsets.ModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('^name',)
+    # filter_backends = (filters.SearchFilter,)
+    # search_fields = ('^name',)
+    # search_param = 'name'
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        name = self.request.query_params.get('name')
+        if name:
+            queryset = queryset.filter(name__istartswith=name)
+        return queryset
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -194,10 +217,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         serializer.save(author=user,)
 
-    # pagination_class = PageNumberPagination
+    @decorators.action(detail=True, methods=['get'], url_path='get-link')
+    def get_short_link(self, request, pk=None):
+        try:
+            recipe = self.get_object()
+        except Recipe.DoesNotExist:
+            return Response({'error': 'Recipe not found'}, status=404)
 
-    # def perform_create(self, serializer):
-    #     serializer.save(owner=self.request.user)
+        short_code = encode_id(recipe.id)
+        full_link = f'{settings.DOMAIN_NAME}/s/{short_code}'
+        return Response({'short-link': full_link})
 
 
 class FavoriteToggle(APIView):

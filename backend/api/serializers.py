@@ -84,19 +84,24 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientReadSerializer(serializers.ModelSerializer):
-    ingredient = IngredientSerializer(read_only=True)
+    id = serializers.ReadOnlyField(source='ingredient.id')
+    name = serializers.ReadOnlyField(source='ingredient.name')
+    measurement_unit = serializers.ReadOnlyField(source='ingredient.measurement_unit')
+    amount = serializers.FloatField(source='quantity')
 
     class Meta:
         model = RecipeIngredient
-        fields = ['ingredient', 'quantity']
+        fields = ['id', 'name', 'measurement_unit', 'amount']
 
 
-class RecipeIngredientWriteSerializer(serializers.ModelSerializer):
-    ingredient = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
+class RecipeIngredientWriteSerializer(serializers.Serializer):
+    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
+    amount = serializers.FloatField()
 
-    class Meta:
-        model = RecipeIngredient
-        fields = ['ingredient', 'quantity']
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Количество ингредиента должно быть больше нуля.')
+        return value
 
 
 class RecipeSerializer(serializers.ModelSerializer):
@@ -104,6 +109,7 @@ class RecipeSerializer(serializers.ModelSerializer):
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
     tags = serializers.PrimaryKeyRelatedField(queryset=Tag.objects.all(), many=True)
+    image = Base64ImageField()
 
     class Meta:
         model = Recipe
@@ -134,9 +140,9 @@ class RecipeSerializer(serializers.ModelSerializer):
         recipe.tags.set(tags_data)
 
         for ingredient_data in ingredients_data:
-            ingredient = ingredient_data['ingredient']  # получение объекта
-            quantity = ingredient_data['quantity']
-            RecipeIngredient.objects.create(recipe=recipe, ingredient=ingredient, quantity=quantity)
+            RecipeIngredient.objects.create(recipe=recipe,
+                                            ingredient=ingredient_data['id'],
+                                            quantity=ingredient_data['amount'])
 
         return recipe
     
@@ -145,8 +151,10 @@ class RecipeSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
 
         # Теперь заменяем поле `ingredients` на сериализатор для чтения
-        ingredients_data = RecipeIngredientReadSerializer(instance.recipeingredient_set, many=True).data
+        ingredients_data = RecipeIngredientReadSerializer(instance.recipeingredient_set.all(), many=True).data
         representation['ingredients'] = ingredients_data  # Обновляем поле `ingredients`
+        representation['tags'] = TagSerializer(instance.tags.all(), many=True).data
+        representation['author'] = UserSerializer(instance.author, context=self.context).data
 
         return representation
 
@@ -165,3 +173,4 @@ class SubscriptionSerializer(UserSerializer):
 
     class Meta(UserSerializer.Meta):
         fields = UserSerializer.Meta.fields + ('recipes', 'recipes_count')
+
