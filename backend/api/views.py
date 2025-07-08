@@ -1,10 +1,11 @@
-from rest_framework import filters, decorators, viewsets, permissions, response, status
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from collections import defaultdict
 from django.conf import settings
 from django.contrib.auth import get_user_model, update_session_auth_hash
-from django.http import HttpResponseRedirect, Http404
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse, HttpResponseRedirect, Http404
+from django.shortcuts import get_object_or_404
+
+from rest_framework import decorators, permissions, response, status, viewsets
+from rest_framework.response import Response
 
 from .utils.shortener import decode_code, encode_id
 from api.serializers import (IngredientSerializer, RecipeSerializer,
@@ -13,7 +14,8 @@ from api.serializers import (IngredientSerializer, RecipeSerializer,
                              UserAvatarSerializer)
 from api.paginators import RecipePagination
 from api.permissions import AdminOrReadOnlyPermission
-from recipes.models import Favorite, Ingredient, Recipe, Tag, ShoppingList
+from recipes.models import (Favorite, Ingredient, Recipe, RecipeIngredient,
+                            Tag, ShoppingList)
 from users.models import Subscription
 
 User = get_user_model()
@@ -61,7 +63,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @decorators.action(
         detail=True,
-        methods=['post'],
+        methods=['post', 'delete'],
         permission_classes=[permissions.IsAuthenticated],
     )
     def subscribe(self, request, id=None):
@@ -69,43 +71,43 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         author = get_object_or_404(User, id=id)
 
-        if user == author:
-            return response.Response(
-                {'errors': 'Нельзя подписаться на самого себя.'},
-                status=status.HTTP_400_BAD_REQUEST
+        if request.method == 'POST':
+            if user == author:
+                return response.Response(
+                    {'errors': 'Нельзя подписаться на самого себя.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            subscription = Subscription.objects.filter(
+                user=user, subscribed_to=author
             )
 
-        subscription = Subscription.objects.filter(user=user, subscribed_to=author)
+            if subscription.exists():
+                return response.Response(
+                    {'errors': 'Вы уже подписаны на этого пользователя.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        if subscription.exists():
+            Subscription.objects.create(user=user, subscribed_to=author)
+            serializer = self.get_serializer(
+                author, context={'request': request}
+            )
             return response.Response(
-                {'errors': 'Вы уже подписаны на этого пользователя.'},
-                status=status.HTTP_400_BAD_REQUEST
+                serializer.data, status=status.HTTP_201_CREATED
             )
 
-        Subscription.objects.create(user=user, subscribed_to=author)
-        serializer = self.get_serializer(author, context={'request': request})
-        return response.Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    @decorators.action(
-        detail=True,
-        methods=['delete'],
-        permission_classes=[permissions.IsAuthenticated],
-    )
-    def unsubscribe(self, request, id=None):
-        """Отписка от пользователя."""
-        user = request.user
-        author = get_object_or_404(User, id=id)
-
-        subscription = Subscription.objects.filter(user=user, subscribed_to=author)
-        if not subscription.exists():
-            return response.Response(
-                {'errors': 'Вы не подписаны на этого пользователя.'},
-                status=status.HTTP_400_BAD_REQUEST
+        if request.method == 'DELETE':
+            subscription = Subscription.objects.filter(
+                user=user, subscribed_to=author
             )
+            if not subscription.exists():
+                return response.Response(
+                    {'errors': 'Вы не подписаны на этого пользователя.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        subscription.delete()
-        return response.Response(status=status.HTTP_204_NO_CONTENT)
+            subscription.delete()
+            return response.Response(status=status.HTTP_204_NO_CONTENT)
 
     @decorators.action(
         detail=False,
@@ -116,7 +118,10 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         subscribed_authors = User.objects.filter(subscribers__user=user)
         page = self.paginate_queryset(subscribed_authors)
-        serializer = SubscriptionSerializer(page, many=True, context={'request': request})
+        serializer = SubscriptionSerializer(
+            page, many=True,
+            context={'request': request}
+        )
         return self.get_paginated_response(serializer.data)
 
     @decorators.action(
@@ -130,10 +135,16 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if request.method in ['PUT', 'PATCH']:
-            serializer = UserAvatarSerializer(user, data=request.data, partial=True, context={'request': request})
+            serializer = UserAvatarSerializer(
+                user, data=request.data,
+                partial=True,
+                context={'request': request}
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            return response.Response(serializer.data, status=status.HTTP_200_OK)
+            return response.Response(
+                serializer.data, status=status.HTTP_200_OK
+            )
 
         if request.method == 'DELETE':
             user.avatar.delete(save=True)  # Удаляем файл и сохраняем модель
@@ -161,7 +172,10 @@ class UserViewSet(viewsets.ModelViewSet):
         user.set_password(new_password)
         user.save()
         update_session_auth_hash(request, user)
-        return Response({"detail": "Пароль успешно изменён."}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"detail": "Пароль успешно изменён."},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 class TagViewSet(viewsets.ModelViewSet):
@@ -204,12 +218,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
         if author_id:
             queryset = queryset.filter(author_id=author_id)
         if self.request.user.is_authenticated:
-            is_favorited = bool(int(self.request.query_params.get('is_favorited', 0)))
-            is_in_shopping_cart = bool(int(self.request.query_params.get('is_in_shopping_cart', 0)))
+            is_favorited = bool(
+                int(self.request.query_params.get('is_favorited', 0))
+            )
+            is_in_shopping_cart = bool(
+                int(self.request.query_params.get('is_in_shopping_cart', 0))
+            )
             if is_favorited:
-                queryset = queryset.filter(favorite__user=self.request.user).distinct()
+                queryset = queryset.filter(
+                    favorite__user=self.request.user
+                ).distinct()
             if is_in_shopping_cart:
-                queryset = queryset.filter(shoppinglist__user=self.request.user).distinct()
+                queryset = queryset.filter(
+                    shoppinglist__user=self.request.user
+                ).distinct()
 
         return queryset
 
@@ -228,24 +250,111 @@ class RecipeViewSet(viewsets.ModelViewSet):
         full_link = f'{settings.DOMAIN_NAME}/s/{short_code}'
         return Response({'short-link': full_link})
 
+    @decorators.action(
+        detail=True,
+        methods=['post', 'delete'],
+        permission_classes=[permissions.IsAuthenticated]
+    )
+    def favorite(self, request, pk=None):
+        """Добавление/удаление рецепта в избранное."""
+        recipe = get_object_or_404(Recipe, id=pk)
+        user = request.user
 
-class FavoriteToggle(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+        if request.method == 'POST':
+            if Favorite.objects.filter(user=user, recipe=recipe).exists():
+                return Response(
+                    {'detail': 'Рецепт уже в избранном.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            Favorite.objects.create(user=user, recipe=recipe)
+            return Response(
+                {'detail': 'Добавлено в избранное.'},
+                status=status.HTTP_201_CREATED
+            )
 
-    def post(self, request, recipe_id):
-        recipe = get_object_or_404(Recipe, id=recipe_id)
-        favorite, created = Favorite.objects.get_or_create(user=request.user, recipe=recipe)
-        if not created:
+        if request.method == 'DELETE':
+            favorite = Favorite.objects.filter(user=user, recipe=recipe)
+            if not favorite.exists():
+                return Response(
+                    {'detail': 'Рецепт не в избранном.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             favorite.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(
+                {'detail': 'Удалено из избранного.'},
+                status=status.HTTP_204_NO_CONTENT
+            )
 
+    @decorators.action(
+        detail=True, methods=['post', 'delete'],
+        permission_classes=[permissions.IsAuthenticated]
+    )
+    def shopping_cart(self, request, pk=None):
+        """Добавление и удаление рецепта из списка покупок."""
+        recipe = get_object_or_404(Recipe, id=pk)
+        user = request.user
 
-class ShoppingListToggle(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+        if request.method == 'POST':
+            if ShoppingList.objects.filter(user=user, recipe=recipe).exists():
+                return Response(
+                    {'detail': 'Рецепт уже в списке покупок.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            ShoppingList.objects.create(user=user, recipe=recipe)
+            return Response(
+                {'detail': 'Добавлено в список покупок.'},
+                status=status.HTTP_201_CREATED
+            )
 
-    def post(self, request, recipe_id):
-        recipe = get_object_or_404(Recipe, id=recipe_id)
-        shopping_item, created = ShoppingList.objects.get_or_create(user=request.user, recipe=recipe)
-        if not created:
-            shopping_item.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        if request.method == 'DELETE':
+            item = ShoppingList.objects.filter(user=user, recipe=recipe)
+            if not item.exists():
+                return Response(
+                    {'detail': 'Рецепта нет в списке покупок.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            item.delete()
+            return Response(
+                {'detail': 'Удалено из списка покупок.'},
+                status=status.HTTP_204_NO_CONTENT
+            )
+
+    @decorators.action(
+        detail=False, methods=['get'],
+        permission_classes=[permissions.IsAuthenticated]
+    )
+    def download_shopping_cart(self, request):
+        """Скачать список покупок в виде TXT файла."""
+        user = request.user
+
+        # Находим все рецепты пользователя в списке покупок
+        recipes = Recipe.objects.filter(shoppinglist__user=user)
+
+        # Словарь: имя ингредиента -> [общее количество, единица измерения]
+        ingredients = defaultdict(lambda: [0, ''])
+
+        # Собираем ингредиенты по всем рецептам
+        recipe_ingredients = RecipeIngredient.objects.filter(
+            recipe__in=recipes
+        )
+
+        for item in recipe_ingredients:
+            name = item.ingredient.name
+            unit = item.ingredient.measurement_unit
+            ingredients[name][0] += item.quantity
+            ingredients[name][1] = unit
+
+        if not ingredients:
+            return Response({'detail': 'Список покупок пуст.'}, status=400)
+
+        # Сформировать текстовое содержимое
+        content = 'Список покупок:\n\n'
+        for name, (quantity, unit) in ingredients.items():
+            content += f'{name} — {quantity} {unit}\n'
+
+        # Вернуть как TXT-файл
+        response = HttpResponse(content, content_type='text/plain')
+        response['Content-Disposition'] = (
+            'attachment; filename="shopping_list.txt"'
+        )
+        return response
