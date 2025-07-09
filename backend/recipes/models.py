@@ -36,8 +36,12 @@ class Ingredient(models.Model):
 
 class Recipe(models.Model):
     tags = models.ManyToManyField(Tag, related_name='recipes')
-    author = models.ForeignKey(User, related_name='recipes', on_delete=models.CASCADE)
-    ingredients = models.ManyToManyField(Ingredient, through='RecipeIngredient')
+    author = models.ForeignKey(
+        User, related_name='recipes', on_delete=models.CASCADE
+    )
+    ingredients = models.ManyToManyField(
+        Ingredient, through='RecipeIngredient'
+    )
     name = models.CharField(max_length=MAX_LENGHT_NAME)
     image = models.ImageField(
         upload_to='recipes/images/',
@@ -47,7 +51,7 @@ class Recipe(models.Model):
     text = models.TextField()
     cooking_time = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         verbose_name = "Рецепт"
         verbose_name_plural = "Рецепты"
@@ -63,7 +67,11 @@ class RecipeIngredient(models.Model):
     quantity = models.FloatField()
 
     def __str__(self):
-        return f"Нужен ингредиент {self.ingredient.name} в количестве {self.quantity} {self.ingredient.measurement_unit} для {self.recipe.name}"
+        return (
+            f"Нужен ингредиент {self.ingredient.name} "
+            f"в количестве {self.quantity} {self.ingredient.measurement_unit} "
+            f"для {self.recipe.name}"
+        )
 
 
 class Favorite(models.Model):

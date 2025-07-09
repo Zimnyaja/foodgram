@@ -43,9 +43,14 @@ class User(AbstractUser):
 
 
 class Subscription(models.Model):
-    user = models.ForeignKey(User, related_name='subscriptions', on_delete=models.CASCADE)
-    subscribed_to = models.ForeignKey(User, related_name='subscribers', on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        User, related_name='subscriptions', on_delete=models.CASCADE
+    )
+    subscribed_to = models.ForeignKey(
+        User, related_name='subscribers', on_delete=models.CASCADE
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f'{self.user.username} подписан на {self.subscribed_to.username}'
+        return (f"{self.user.username} подписан "
+                f"на {self.subscribed_to.username}")
