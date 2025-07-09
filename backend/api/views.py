@@ -162,11 +162,11 @@ class UserViewSet(viewsets.ModelViewSet):
         new_password = request.data.get('new_password')
 
         if not current_password or not new_password:
-            return Response({"detail": "Текущий и новый пароли обязательны."},
+            return Response({'detail': 'Текущий и новый пароли обязательны.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
         if not user.check_password(current_password):
-            return Response({"current_password": "Неверный пароль."},
+            return Response({'current_password': 'Неверный пароль.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(new_password)
