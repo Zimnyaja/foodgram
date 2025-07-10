@@ -28,7 +28,7 @@ services:
       - static:/static
 
   nginx:
-    image: nginx:1.25.4-alpine
+    image: zimnyaja1/foodgram_gateway
     depends_on:
       - backend
       - frontend
