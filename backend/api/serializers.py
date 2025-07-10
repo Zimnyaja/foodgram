@@ -147,9 +147,7 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tags_data = validated_data.pop('tags', [])
-        print(tags_data)
         ingredients_data = validated_data.pop('ingredients')
-        print("Ingredients Data:", ingredients_data)
         recipe = Recipe.objects.create(**validated_data)
         recipe.tags.set(tags_data)
 
@@ -159,6 +157,31 @@ class RecipeSerializer(serializers.ModelSerializer):
                                             quantity=ingredient_data['amount'])
 
         return recipe
+
+    def update(self, instance, validated_data):
+        # Обновляем поля основного объекта
+        tags_data = validated_data.pop('tags', None)
+        ingredients_data = validated_data.pop('ingredients', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Обновляем теги
+        if tags_data is not None:
+            instance.tags.set(tags_data)
+
+        # Обновляем ингредиенты
+        if ingredients_data is not None:
+            # Удаляем старые ингредиенты
+            instance.recipeingredient_set.all().delete()
+            for ingredient_data in ingredients_data:
+                RecipeIngredient.objects.create(
+                    recipe=instance,
+                    ingredient=ingredient_data['id'],
+                    quantity=ingredient_data['amount']
+                )
+        return instance
 
     def to_representation(self, instance):
         # Сначала вызываем стандартный `to_representation`
