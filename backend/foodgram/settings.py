@@ -169,3 +169,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 DOMAIN_NAME = os.getenv('DOMAIN_NAME', 'http://localhost')
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://myfirstproject.zapto.org',
+]
