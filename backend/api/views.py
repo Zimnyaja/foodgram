@@ -173,7 +173,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
         update_session_auth_hash(request, user)
         return Response(
-            {"detail": "Пароль успешно изменён."},
+            {'detail': 'Пароль успешно изменён.'},
             status=status.HTTP_204_NO_CONTENT
         )
 
