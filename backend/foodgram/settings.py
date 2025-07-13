@@ -62,8 +62,12 @@ WSGI_APPLICATION = 'foodgram.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',  # Путь к локальной базе
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'django_db'),
+        'USER': os.getenv('DB_USER', 'django_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'django_password'),
+        'HOST': os.getenv('DB_HOST', 'db'),
+        'PORT': os.getenv('DB_PORT', 5432),
     }
 }
 
@@ -167,4 +171,3 @@ CORS_ALLOWED_ORIGINS = [
 DOMAIN_NAME = os.getenv('DOMAIN_NAME', 'http://localhost')
 
 CSRF_TRUSTED_ORIGINS = os.getenv('DOMAIN_NAME', '').split(',')
-CSRF_TRUSTED_ORIGINS += ['http://localhost', 'http://127.0.0.1']
