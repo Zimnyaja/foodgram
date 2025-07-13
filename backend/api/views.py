@@ -13,7 +13,7 @@ from api.serializers import (IngredientSerializer, RecipeSerializer,
                              TagSerializer, UserCreateSerializer,
                              UserSerializer, UserAvatarSerializer)
 from api.paginators import RecipePagination
-from api.permissions import AdminOrReadOnlyPermission, IsAuthorOrReadOnly
+from api.permissions import IsAuthorOrReadOnly
 from recipes.models import (Favorite, Ingredient, Recipe, RecipeIngredient,
                             Tag, ShoppingList)
 from users.models import Subscription
@@ -298,7 +298,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             Favorite.objects.create(user=user, recipe=recipe)
-            serializer = RecipeShortSerializer(recipe, context={'request': request})
+            serializer = RecipeShortSerializer(
+                recipe, context={'request': request}
+            )
             return Response(
                 serializer.data,
                 status=status.HTTP_201_CREATED
@@ -333,7 +335,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             ShoppingList.objects.create(user=user, recipe=recipe)
-            serializer = RecipeShortSerializer(recipe, context={'request': request})
+            serializer = RecipeShortSerializer(
+                recipe, context={'request': request}
+            )
             return Response(
                 serializer.data,
                 status=status.HTTP_201_CREATED
