@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q, F
 from django.contrib.auth.models import AbstractUser
 
 from users.constants import (EMAIL_LENGTH, NAME_LENGTH)
@@ -32,6 +33,8 @@ class User(AbstractUser):
         blank=True,
         default='',
     )
+    USERNAME_FIELD = 'email'  # Используем email вместо username для входа
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']  # Обязательное
 
     class Meta:
         verbose_name = 'Пользователь'
@@ -50,6 +53,26 @@ class Subscription(models.Model):
         User, related_name='subscribers', on_delete=models.CASCADE
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # 1️⃣ Ограничение: Запрет на повторную подписку
+            models.UniqueConstraint(
+                fields=['user', 'subscribed_to'],
+                # Поля, которые должны быть уникальными в комбинации
+                name='unique_subscription'  # Название ограничения
+            ),
+            # 2️⃣ Ограничение: Запрет подписки на самого себя
+            models.CheckConstraint(
+                check=~Q(user=F('subscribed_to')),
+                # Проверка, что пользователь не подписан сам на себя
+                name='prevent_self_subscription'  # Название ограничения
+            ),
+        ]
+        verbose_name = 'Подписка'  # Корректное имя модели в админ-панели
+        verbose_name_plural = 'Подписки'  # Корректное множественное число
+        ordering = ['-created_at']
+        # Сортировка по дате создания (например, последние подписки сверху)
 
     def __str__(self):
         return (f"{self.user.username} подписан "

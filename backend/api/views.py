@@ -9,11 +9,11 @@ from rest_framework.response import Response
 
 from .utils.shortener import decode_code, encode_id
 from api.serializers import (IngredientSerializer, RecipeSerializer,
-                             SubscriptionSerializer, TagSerializer,
-                             UserCreateSerializer, UserSerializer,
-                             UserAvatarSerializer)
+                             RecipeShortSerializer, SubscriptionSerializer,
+                             TagSerializer, UserCreateSerializer,
+                             UserSerializer, UserAvatarSerializer)
 from api.paginators import RecipePagination
-from api.permissions import AdminOrReadOnlyPermission
+from api.permissions import AdminOrReadOnlyPermission, IsAuthorOrReadOnly
 from recipes.models import (Favorite, Ingredient, Recipe, RecipeIngredient,
                             Tag, ShoppingList)
 from users.models import Subscription
@@ -36,12 +36,11 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     pagination_class = RecipePagination
     lookup_field = 'id'
+    serializer_class = UserSerializer
 
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer
-        if self.action in ['retrieve', 'me', 'subscriptions']:
-            return SubscriptionSerializer
         return UserSerializer
 
     def get_permissions(self):
@@ -57,9 +56,16 @@ class UserViewSet(viewsets.ModelViewSet):
         permission_classes=[permissions.IsAuthenticated]
     )
     def me(self, request):
-        """Возвращает данные текущего авторизованного пользователя."""
+        if not request.user.is_authenticated:
+            return response.Response(
+                {'detail': 'Authentication credentials were not provided.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         serializer = self.get_serializer(request.user)
         return response.Response(serializer.data)
+        # """Возвращает данные текущего авторизованного пользователя."""
+        # serializer = self.get_serializer(request.user)
+        # return response.Response(serializer.data)
 
     @decorators.action(
         detail=True,
@@ -88,12 +94,18 @@ class UserViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Создаём подписку
             Subscription.objects.create(user=user, subscribed_to=author)
-            serializer = self.get_serializer(
-                author, context={'request': request}
+
+            # Ограничиваем количество рецептов
+            recipes_limit = request.query_params.get('recipes_limit')
+            serializer = SubscriptionSerializer(
+                author,
+                context={'request': request, 'recipes_limit': recipes_limit}
             )
             return response.Response(
-                serializer.data, status=status.HTTP_201_CREATED
+                serializer.data,
+                status=status.HTTP_201_CREATED
             )
 
         if request.method == 'DELETE':
@@ -115,14 +127,32 @@ class UserViewSet(viewsets.ModelViewSet):
         permission_classes=[permissions.IsAuthenticated]
     )
     def subscriptions(self, request):
+        """
+        Список подписок текущего пользователя без пагинации.
+        """
+        # Получаем всех авторов, на которых подписан пользователь
         user = request.user
         subscribed_authors = User.objects.filter(subscribers__user=user)
-        page = self.paginate_queryset(subscribed_authors)
+
+        paginator = RecipePagination()
+        page = paginator.paginate_queryset(subscribed_authors, request)
+
+        recipes_limit = request.query_params.get('recipes_limit')
+
+        if page is not None:
+            # Если есть пагинация, сериализуем только текущую страницу
+            serializer = SubscriptionSerializer(
+                page, many=True,
+                context={'request': request, 'recipes_limit': recipes_limit}
+            )
+            return paginator.get_paginated_response(serializer.data)
+
+        # Если параметры пагинации отсутствуют, возвращаем полный список
         serializer = SubscriptionSerializer(
-            page, many=True,
-            context={'request': request}
+            subscribed_authors, many=True,
+            context={'request': request, 'recipes_limit': recipes_limit}
         )
-        return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     @decorators.action(
         detail=False,
@@ -135,6 +165,11 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if request.method in ['PUT', 'PATCH']:
+            if 'avatar' not in request.data:
+                return response.Response(
+                    {'avatar': ['This field is required.']},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             serializer = UserAvatarSerializer(
                 user, data=request.data,
                 partial=True,
@@ -178,21 +213,15 @@ class UserViewSet(viewsets.ModelViewSet):
         )
 
 
-class TagViewSet(viewsets.ModelViewSet):
+class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    # lookup_field = "slug"
-    # filter_backends = (filters.SearchFilter,)
-    # search_fields = ('name',)
-    permission_classes = (AdminOrReadOnlyPermission,)
+    # permission_classes = (AdminOrReadOnlyPermission,)
 
 
-class IngredientViewSet(viewsets.ModelViewSet):
+class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    # filter_backends = (filters.SearchFilter,)
-    # search_fields = ('^name',)
-    # search_param = 'name'
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -205,7 +234,9 @@ class IngredientViewSet(viewsets.ModelViewSet):
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
     serializer_class = RecipeSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [
+        permissions.IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly
+    ]
     pagination_class = RecipePagination
 
     def get_queryset(self):
@@ -267,8 +298,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             Favorite.objects.create(user=user, recipe=recipe)
+            serializer = RecipeShortSerializer(recipe, context={'request': request})
             return Response(
-                {'detail': 'Добавлено в избранное.'},
+                serializer.data,
                 status=status.HTTP_201_CREATED
             )
 
@@ -301,8 +333,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             ShoppingList.objects.create(user=user, recipe=recipe)
+            serializer = RecipeShortSerializer(recipe, context={'request': request})
             return Response(
-                {'detail': 'Добавлено в список покупок.'},
+                serializer.data,
                 status=status.HTTP_201_CREATED
             )
 

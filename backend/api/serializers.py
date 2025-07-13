@@ -145,6 +145,38 @@ class RecipeSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
+    def validate(self, data):
+        """
+        Общая валидация ингредиентов и тегов.
+        """
+        # Проверка наличия ингредиентов
+        ingredients = data.get('ingredients')
+        if not ingredients:
+            raise serializers.ValidationError(
+                {'ingredients': 'Необходимо указать хотя бы один ингредиент.'}
+            )
+        # Проверка уникальности ингредиентов
+        unique_ingredients = {ingredient['id'] for ingredient in ingredients}
+        if len(unique_ingredients) != len(ingredients):
+            raise serializers.ValidationError(
+                {'ingredients': 'Ингредиенты в рецепте должны быть уникальными.'}
+            )
+
+        # Проверка наличия тегов
+        tags = data.get('tags')
+        if not tags:
+            raise serializers.ValidationError(
+                {'tags': 'Необходимо указать хотя бы один тег.'}
+            )
+        # Проверка уникальности тегов
+        unique_tags = set(tags)
+        if len(unique_tags) != len(tags):
+            raise serializers.ValidationError(
+                {'tags': 'Теги в рецепте должны быть уникальными.'}
+            )
+
+        return data
+
     def create(self, validated_data):
         tags_data = validated_data.pop('tags', [])
         ingredients_data = validated_data.pop('ingredients')
@@ -214,11 +246,30 @@ class RecipeShortSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(UserSerializer):
-    recipes = RecipeShortSerializer(many=True, read_only=True)
-    recipes_count = serializers.IntegerField(
-        source='recipes.count',
-        read_only=True
-    )
+    recipes = serializers.SerializerMethodField()  # Изменяем на SerializerMethodField
+    recipes_count = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
         fields = UserSerializer.Meta.fields + ('recipes', 'recipes_count')
+
+    def get_recipes(self, obj):
+        """
+        Возвращает рецепты автора с учётом ограничения recipes_limit.
+        """
+        request = self.context.get('request')
+        recipes_limit = self.context.get('recipes_limit')  # Берём recipes_limit из контекста
+
+        recipes = obj.recipes.all()  # Получаем все рецепты автора
+        if recipes_limit:  # Применяем ограничение
+            try:
+                recipes = recipes[:int(recipes_limit)]
+            except ValueError:
+                pass  # Если параметр невалидный, игнорируем его
+
+        return RecipeShortSerializer(recipes, many=True, context={'request': request}).data
+
+    def get_recipes_count(self, obj):
+        """
+        Возвращает общее количество рецептов автора.
+        """
+        return obj.recipes.count()
