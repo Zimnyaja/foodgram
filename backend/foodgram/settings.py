@@ -62,12 +62,8 @@ WSGI_APPLICATION = 'foodgram.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'django_db'),
-        'USER': os.getenv('DB_USER', 'django_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'django_password'),
-        'HOST': os.getenv('DB_HOST', 'db'),
-        'PORT': os.getenv('DB_PORT', 5432),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',  # Путь к локальной базе
     }
 }
 
@@ -130,7 +126,7 @@ DJOSER = {
     "USER_CREATE_PASSWORD_RETYPE": False,
     "USER_ID_FIELD": "id",
     "SERIALIZERS": {
-        "user_create": "api.serializers.UserCreateSerializer",
+        # "user_create": "api.serializers.UserCreateSerializer",
         "user": "api.serializers.UserSerializer",
         "current_user": "api.serializers.UserSerializer",
     },
@@ -158,7 +154,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTHENTICATION_BACKENDS = [
-    'users.auth_backends.EmailBackend',           # кастомный backend email логин
+    # 'users.auth_backends.EmailBackend',           # кастомный backend email логин
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -170,6 +166,5 @@ CORS_ALLOWED_ORIGINS = [
 
 DOMAIN_NAME = os.getenv('DOMAIN_NAME', 'http://localhost')
 
-CSRF_TRUSTED_ORIGINS = [
-    os.getenv('DOMAIN_NAME', '').split(',')
-]
+CSRF_TRUSTED_ORIGINS = os.getenv('DOMAIN_NAME', '').split(',')
+CSRF_TRUSTED_ORIGINS += ['http://localhost', 'http://127.0.0.1']
