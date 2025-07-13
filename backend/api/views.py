@@ -63,9 +63,6 @@ class UserViewSet(viewsets.ModelViewSet):
             )
         serializer = self.get_serializer(request.user)
         return response.Response(serializer.data)
-        # """Возвращает данные текущего авторизованного пользователя."""
-        # serializer = self.get_serializer(request.user)
-        # return response.Response(serializer.data)
 
     @decorators.action(
         detail=True,
@@ -216,7 +213,6 @@ class UserViewSet(viewsets.ModelViewSet):
 class TagViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    # permission_classes = (AdminOrReadOnlyPermission,)
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
