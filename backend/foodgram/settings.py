@@ -170,4 +170,4 @@ CORS_ALLOWED_ORIGINS = [
 
 DOMAIN_NAME = os.getenv('DOMAIN_NAME', 'http://localhost')
 
-CSRF_TRUSTED_ORIGINS = os.getenv('DOMAIN_NAME', '').split(',')
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED', '').split(',')
