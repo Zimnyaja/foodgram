@@ -44,7 +44,7 @@ class RecipeAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         # Аннотация для подсчёта избранных
         queryset = super().get_queryset(request)
-        queryset = queryset.annotate(favorites_count=Count('favorite'))
+        queryset = queryset.annotate(favorites_count=Count('favorite_set'))
         return queryset
 
     @admin.display(description='В избранном')

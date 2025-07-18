@@ -4,7 +4,8 @@ from django.db import models
 
 from .constants import (
     MAX_LENGHT_NAME, MAX_LENGHT_SLUG, MAX_LENGHT_TAG,
-    MAX_LENGHT_INGREDIENT_NAME, MAX_LENGHT_MEASUREMENT
+    MAX_LENGHT_INGREDIENT_NAME, MAX_LENGHT_MEASUREMENT,
+    MIN_COOKING_TIME
 )
 
 User = get_user_model()
@@ -12,15 +13,28 @@ User = get_user_model()
 
 class BaseUserRecipe(models.Model):
     """Базовый класс для моделей, связывающих пользователя и рецепт."""
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    recipe = models.ForeignKey('Recipe', on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, verbose_name="Пользователь", related_name="%(class)s_set",
+    )
+    recipe = models.ForeignKey(
+        'Recipe', on_delete=models.CASCADE, verbose_name="Рецепт", related_name="%(class)s_set",
+    )
 
     class Meta:
         abstract = True
+        constraints = [
+            models.UniqueConstraint(
+                # Пользователь не может добавлять один и тот же рецепт дважды
+                fields=['user', 'recipe'],
+                name="unique_%(class)s"
+            )
+        ]
 
 
 class Tag(models.Model):
-    name = models.CharField(max_length=MAX_LENGHT_TAG, unique=True)
+    name = models.CharField(
+        max_length=MAX_LENGHT_TAG, unique=True, verbose_name="Название"
+    )
     slug = models.SlugField(max_length=MAX_LENGHT_SLUG, unique=True)
 
     class Meta:
@@ -33,8 +47,12 @@ class Tag(models.Model):
 
 
 class Ingredient(models.Model):
-    name = models.CharField(max_length=MAX_LENGHT_INGREDIENT_NAME)
-    measurement_unit = models.CharField(max_length=MAX_LENGHT_MEASUREMENT)
+    name = models.CharField(
+        max_length=MAX_LENGHT_INGREDIENT_NAME, verbose_name="Название"
+    )
+    measurement_unit = models.CharField(
+        max_length=MAX_LENGHT_MEASUREMENT, verbose_name="Мера измерения"
+    )
 
     class Meta:
         verbose_name = "Ингредиент"
@@ -53,22 +71,29 @@ class Ingredient(models.Model):
 
 
 class Recipe(models.Model):
-    tags = models.ManyToManyField(Tag, related_name='recipes')
+    tags = models.ManyToManyField(
+        Tag, related_name='recipes', verbose_name="Теги"
+    )
     author = models.ForeignKey(
-        User, related_name='recipes', on_delete=models.CASCADE
+        User, related_name='recipes',
+        on_delete=models.CASCADE,
+        verbose_name="Автор"
     )
     ingredients = models.ManyToManyField(
         Ingredient, through='RecipeIngredient'
     )
-    name = models.CharField(max_length=MAX_LENGHT_NAME)
+    name = models.CharField(
+        max_length=MAX_LENGHT_NAME, verbose_name="Название рецепта"
+    )
     image = models.ImageField(
         upload_to='recipes/images/',
         null=True,
-        default=None
+        default=None,
+        verbose_name="Картинка"
     )
-    text = models.TextField()
+    text = models.TextField(verbose_name="Описание")
     cooking_time = models.PositiveIntegerField(
-        validators=[MinValueValidator(1)],  # Добавляем валидатор
+        validators=[MinValueValidator(MIN_COOKING_TIME)],
         verbose_name="Время приготовления"
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -84,13 +109,17 @@ class Recipe(models.Model):
 
 class RecipeIngredient(models.Model):
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE)
-    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE)
-    # Нашла, действительно, где было требование к целому числу, хотя на мой
-    # взгляд лучше Флоат, особенно для ингредиентов в кг.
-    # Специально не меняла название поля, оставила как было в моей изначальной
-    # модели. Я наглядно разбиралась, как работать
-    # в случае если в модели одно название, а фронт просит другое.
-    quantity = models.IntegerField()
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.CASCADE, verbose_name="Ингредиент"
+    )
+    quantity = models.PositiveIntegerField(
+        validators=[MinValueValidator(MIN_COOKING_TIME)],
+        verbose_name="Количество"
+    )
+
+    class Meta:
+        verbose_name = "Ингредиент в рецепте"
+        verbose_name_plural = "Ингредиенты в рецепте"
 
     def __str__(self):
         return (
@@ -104,23 +133,9 @@ class Favorite(BaseUserRecipe):
     class Meta:
         verbose_name = "Избранное"
         verbose_name_plural = "Избранные"
-        constraints = [
-            models.UniqueConstraint(
-                # Пользователь не может добавлять один и тот же рецепт дважды
-                fields=['user', 'recipe'],
-                name="unique_favorite"  # Уникальность на уровне базы данных
-            )
-        ]
 
 
 class ShoppingList(BaseUserRecipe):
     class Meta:
         verbose_name = "Список покупок"
         verbose_name_plural = "Списки покупок"
-        constraints = [
-            models.UniqueConstraint(
-                # Пользователь не может добавлять один и тот же рецепт дважды
-                fields=['user', 'recipe'],
-                name="unique_shopping_list"  # Уникальность в списке покупок
-            )
-        ]

@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', get_random_secret_key())
 
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 't')
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_filters',
     'rest_framework',
     'rest_framework.authtoken',
     'djoser',
@@ -62,6 +63,8 @@ WSGI_APPLICATION = 'foodgram.wsgi.application'
 
 DATABASES = {
     'default': {
+        # 'ENGINE': 'django.db.backends.sqlite3',
+        # 'NAME': BASE_DIR / 'db.sqlite3',
         'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
         'NAME': os.getenv('DB_NAME', 'django_db'),
         'USER': os.getenv('DB_USER', 'django_user'),
@@ -91,15 +94,19 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',  # Это дефолтное значение, разрешающее всё
+    ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.TokenAuthentication',
     ),
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'ru'
 
 TIME_ZONE = 'UTC'
 
@@ -130,7 +137,6 @@ DJOSER = {
     "USER_CREATE_PASSWORD_RETYPE": False,
     "USER_ID_FIELD": "id",
     "SERIALIZERS": {
-        # "user_create": "api.serializers.UserCreateSerializer",
         "user": "api.serializers.UserSerializer",
         "current_user": "api.serializers.UserSerializer",
     },
@@ -158,7 +164,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTHENTICATION_BACKENDS = [
-    # 'users.auth_backends.EmailBackend',           # кастомный backend email логин
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -168,6 +173,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:3000',
 ]
 
-DOMAIN_NAME = os.getenv('DOMAIN_NAME', 'http://localhost')
-
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED', '').split(',')
+
+PAGE_SIZE = 6
+MAX_LIMIT = 100
