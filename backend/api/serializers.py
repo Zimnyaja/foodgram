@@ -68,12 +68,6 @@ class IngredientSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'measurement_unit')
 
 
-# все равно не могу оставить один сериалайзер для записи и чтения,
-# т.к. поля для выдачи и записи разные. Кроме того, в моей модели поле для
-# amount называется quantity. Поэтому приходится единый сериалайзер делать
-# огромным, и перегруженным чтобы настроить его корректную работу.
-# Двумя разными намного компактнее выходит. Может еще логика моего кода и
-# обработок ниже вступает в конфликт. Не разобралась как его просто объединить.
 class RecipeIngredientSerializer(serializers.ModelSerializer):
     id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
     name = serializers.ReadOnlyField(source='ingredient.name')
@@ -123,11 +117,17 @@ class RecipeSerializer(serializers.ModelSerializer):
     )
     image = Base64ImageField()
 
+    # Поля с значениями по умолчанию
+    is_favorited = serializers.BooleanField(read_only=True, default=False)
+    is_in_shopping_cart = serializers.BooleanField(read_only=True, default=False)
+
     class Meta:
         model = Recipe
         fields = (
             'id', 'tags', 'author', 'ingredients',
-            'name', 'image', 'text', 'cooking_time'
+            'name', 'image', 'text', 'cooking_time',
+            'is_favorited',
+            'is_in_shopping_cart',
         )
         read_only_fields = ('author',)
 
