@@ -1,8 +1,13 @@
+from dotenv import load_dotenv
 import os
-from django.core.management.utils import get_random_secret_key
 from pathlib import Path
 
+from django.core.management.utils import get_random_secret_key
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+PROJECT_ROOT = BASE_DIR.parent
+load_dotenv(PROJECT_ROOT / '.env')
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', get_random_secret_key())
 
@@ -60,6 +65,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'foodgram.wsgi.application'
 
+
+# if os.getenv('DB_ENGINE') == 'django.db.backends.sqlite3':
+#     # Конфигурация для SQLite (по умолчанию для разработки)
+#     DATABASES = {
+#         'default': {
+#             'ENGINE': 'django.db.backends.sqlite3',
+#             'NAME': BASE_DIR / 'db.sqlite3',
+#         }
+#     }
+# else:
+#     # Конфигурация для PostgreSQL (по умолчанию для продакшена)
+#     DATABASES = {
+#         'default': {
+#             'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+#             'NAME': os.getenv('DB_NAME', 'django_db'),
+#             'USER': os.getenv('DB_USER', 'django_user'),
+#             'PASSWORD': os.getenv('DB_PASSWORD', 'django_password'),
+#             'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+#             'PORT': os.getenv('DB_PORT', 5432),
+#         }
+#     }
 
 DATABASES = {
     'default': {

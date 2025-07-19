@@ -35,6 +35,37 @@ class BaseUserRecipe(models.Model):
         ]
 
 
+class RecipeQuerySet(models.QuerySet):
+    def with_user_flags(self, user):
+        """
+        Добавляет аннотации:
+        - is_favorited: True, если рецепт в избранном у пользователя.
+        - is_in_shopping_cart: True, если рецепт добавлен в корзину.
+        """
+        if user.is_authenticated:
+            return self.annotate(
+                is_favorited=models.Exists(
+                    Favorite.objects.filter(
+                        user=user, recipe=models.OuterRef('pk')
+                    )
+                ),
+                is_in_shopping_cart=models.Exists(
+                    ShoppingList.objects.filter(
+                        user=user, recipe=models.OuterRef('pk')
+                    )
+                )
+            )
+        # Для неавторизованных пользователей
+        return self.annotate(
+            is_favorited=models.Value(
+                False, output_field=models.BooleanField()
+            ),
+            is_in_shopping_cart=models.Value(
+                False, output_field=models.BooleanField()
+            )
+        )
+
+
 class Tag(models.Model):
     name = models.CharField(
         max_length=MAX_LENGHT_TAG, unique=True, verbose_name="Название"
@@ -101,6 +132,7 @@ class Recipe(models.Model):
         verbose_name="Время приготовления"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    objects = RecipeQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Рецепт"

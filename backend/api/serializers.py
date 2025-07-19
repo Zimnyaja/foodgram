@@ -1,11 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
-
 from rest_framework import serializers
 
 from api.fields import Base64ImageField
-from recipes.models import (Favorite, Ingredient, Recipe, RecipeIngredient,
-                            ShoppingList, Tag)
+from recipes.models import (Ingredient, Recipe, RecipeIngredient, Tag)
 from users.models import Subscription
 
 
@@ -69,7 +67,7 @@ class IngredientSerializer(serializers.ModelSerializer):
 
 
 class RecipeIngredientSerializer(serializers.ModelSerializer):
-    id = serializers.PrimaryKeyRelatedField(queryset=Ingredient.objects.all())
+    id = serializers.ReadOnlyField(source='ingredient.id')
     name = serializers.ReadOnlyField(source='ingredient.name')
     measurement_unit = serializers.ReadOnlyField(
         source='ingredient.measurement_unit'
@@ -99,8 +97,10 @@ class RecipeReadSerializer(serializers.ModelSerializer):
     )
     tags = TagSerializer(many=True)
     author = UserSerializer(read_only=True)
-    is_favorited = serializers.BooleanField(read_only=True)
-    is_in_shopping_cart = serializers.BooleanField(read_only=True)
+    is_favorited = serializers.BooleanField(read_only=True, default=False)
+    is_in_shopping_cart = serializers.BooleanField(
+        read_only=True, default=False
+    )
 
     class Meta:
         model = Recipe
@@ -179,13 +179,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         )
         recipe.tags.set(tags_data)
         self._process_recipe_ingredients(recipe, ingredients_data)
-        user = self.context['request'].user
-        recipe.is_favorited = Favorite.objects.filter(
-            user=user, recipe=recipe
-        ).exists()
-        recipe.is_in_shopping_cart = ShoppingList.objects.filter(
-            user=user, recipe=recipe
-        ).exists()
         return recipe
 
     @transaction.atomic
@@ -207,10 +200,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         """
         recipe_ingredients = []
         for ingredient_data in ingredients_data:
-            if 'id' not in ingredient_data or 'amount' not in ingredient_data:
-                raise serializers.ValidationError(
-                    'Каждый ингредиент должен содержать поля "id" и "amount".'
-                )
             recipe_ingredient = RecipeIngredient(
                 recipe=recipe,
                 ingredient=ingredient_data['id'],

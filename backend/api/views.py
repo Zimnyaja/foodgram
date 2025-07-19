@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import BooleanField, Exists, OuterRef, Sum, Value
+from django.db.models import Sum
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -9,7 +9,7 @@ from rest_framework import decorators, permissions, response, status, viewsets
 from rest_framework.response import Response
 
 from recipes.utils.shortener import encode_id
-from api.filters import RecipeFilter
+from api.filters import IngredientFilter, RecipeFilter
 from api.serializers import (
     IngredientSerializer, RecipeReadSerializer, RecipeSerializer,
     RecipeShortSerializer, SubscriptionSerializer, TagSerializer,
@@ -63,7 +63,7 @@ class UserViewSet(DjoserUserViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            subscription, created = Subscription.objects.get_or_create(
+            _, created = Subscription.objects.get_or_create(
                 user=user,
                 subscribed_to=author
             )
@@ -84,9 +84,7 @@ class UserViewSet(DjoserUserViewSet):
                 status=status.HTTP_201_CREATED
             )
 
-        # Delete. Мне не понравилось выносить на 2 разных метода, код местами
-        # начинает дублироваться. Кажется, что вся подписка в одном методе
-        # компактнее выглядит
+        """Метод Delete"""
         subscription = Subscription.objects.filter(
             user=user, subscribed_to=author
         )
@@ -166,13 +164,8 @@ class TagViewSet(viewsets.ReadOnlyModelViewSet):
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        name = self.request.query_params.get('name')
-        if name:
-            queryset = queryset.filter(name__istartswith=name)
-        return queryset
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = IngredientFilter
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -194,29 +187,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return RecipeSerializer  # Запись/обновление рецептов
 
     def get_queryset(self):
-        """
-        Оптимизация запросов через аннотации для избранного и корзины.
-        """
-        queryset = super().get_queryset()
-        if self.request.user.is_authenticated:
-            queryset = queryset.annotate(
-                is_favorited=Exists(
-                    Favorite.objects.filter(
-                        user=self.request.user, recipe=OuterRef('pk')
-                    )
-                ),
-                is_in_shopping_cart=Exists(
-                    ShoppingList.objects.filter(
-                        user=self.request.user, recipe=OuterRef('pk')
-                    )
-                )
-            )
-        else:
-            queryset = queryset.annotate(
-                is_favorited=Value(False, output_field=BooleanField()),
-                is_in_shopping_cart=Value(False, output_field=BooleanField())
-            )
-        return queryset
+        user = self.request.user
+        return Recipe.objects.with_user_flags(user)
 
     @decorators.action(detail=True, methods=['get'], url_path='get-link')
     def get_short_link(self, request, pk=None):
@@ -236,7 +208,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         recipe = get_object_or_404(Recipe, id=pk)
         user = request.user
         if request.method == 'POST':
-            obj, created = model.objects.get_or_create(
+            _, created = model.objects.get_or_create(
                 user=user, recipe=recipe
             )
             if not created:
