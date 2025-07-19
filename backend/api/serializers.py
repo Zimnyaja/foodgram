@@ -119,7 +119,9 @@ class RecipeSerializer(serializers.ModelSerializer):
 
     # Поля с значениями по умолчанию
     is_favorited = serializers.BooleanField(read_only=True, default=False)
-    is_in_shopping_cart = serializers.BooleanField(read_only=True, default=False)
+    is_in_shopping_cart = serializers.BooleanField(
+        read_only=True, default=False
+    )
 
     class Meta:
         model = Recipe

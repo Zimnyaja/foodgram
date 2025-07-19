@@ -11,8 +11,10 @@ class RecipeFilter(filters.FilterSet):
     # is_in_shopping_cart = filters.BooleanFilter(
     #     method='filter_is_in_shopping_cart'
     # )
-    is_favorited = filters.BooleanFilter(field_name='is_favorited')  # Убрали `method=`
-    is_in_shopping_cart = filters.BooleanFilter(field_name='is_in_shopping_cart')  # Убрали `method=`
+    is_favorited = filters.BooleanFilter(field_name='is_favorited')
+    is_in_shopping_cart = filters.BooleanFilter(
+        field_name='is_in_shopping_cart'
+    )
 
     class Meta:
         model = Recipe
