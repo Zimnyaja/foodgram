@@ -66,40 +66,26 @@ TEMPLATES = [
 WSGI_APPLICATION = 'foodgram.wsgi.application'
 
 
-# if os.getenv('DB_ENGINE') == 'django.db.backends.sqlite3':
-#     # Конфигурация для SQLite (по умолчанию для разработки)
-#     DATABASES = {
-#         'default': {
-#             'ENGINE': 'django.db.backends.sqlite3',
-#             'NAME': BASE_DIR / 'db.sqlite3',
-#         }
-#     }
-# else:
-#     # Конфигурация для PostgreSQL (по умолчанию для продакшена)
-#     DATABASES = {
-#         'default': {
-#             'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-#             'NAME': os.getenv('DB_NAME', 'django_db'),
-#             'USER': os.getenv('DB_USER', 'django_user'),
-#             'PASSWORD': os.getenv('DB_PASSWORD', 'django_password'),
-#             'HOST': os.getenv('DB_HOST', '127.0.0.1'),
-#             'PORT': os.getenv('DB_PORT', 5432),
-#         }
-#     }
-
-DATABASES = {
-    'default': {
-        # 'ENGINE': 'django.db.backends.sqlite3',
-        # 'NAME': BASE_DIR / 'db.sqlite3',
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'django_db'),
-        'USER': os.getenv('DB_USER', 'django_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'django_password'),
-        'HOST': os.getenv('DB_HOST', 'db'),
-        'PORT': os.getenv('DB_PORT', 5432),
+if os.getenv('DB_ENGINE') == 'django.db.backends.sqlite3':
+    # Конфигурация для SQLite (по умолчанию для разработки)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
-
+else:
+    # Конфигурация для PostgreSQL (по умолчанию для продакшена)
+    DATABASES = {
+        'default': {
+            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+            'NAME': os.getenv('DB_NAME', 'django_db'),
+            'USER': os.getenv('DB_USER', 'django_user'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'django_password'),
+            'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+            'PORT': os.getenv('DB_PORT', 5432),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators

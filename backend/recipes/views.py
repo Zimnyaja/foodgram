@@ -1,5 +1,6 @@
 from django.shortcuts import redirect
 from django.http import HttpResponseRedirect
+
 from .models import Recipe
 from .utils.shortener import decode_code
 
